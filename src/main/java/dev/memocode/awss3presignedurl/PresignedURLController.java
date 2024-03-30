@@ -2,6 +2,7 @@ package dev.memocode.awss3presignedurl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,13 +18,15 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
 
+import static org.springframework.http.HttpStatus.FOUND;
+
 @Slf4j
 @RestController
 public class PresignedURLController {
 
     private final static String BUCKET_NAME = "test-memocode-1";
 
-    @PostMapping("/presignedPutURL")
+    @PostMapping("/presignedURL")
     public ResponseEntity<String> createPresignedPutURL() {
         try (
                 // S3Presigner는 presignedURL을 생성하는 객체입니다.
@@ -53,6 +56,39 @@ public class PresignedURLController {
             return ResponseEntity
                     .created(URI.create(presignedURL))
                     .body(presignedURL);
+        }
+    }
+
+    @GetMapping("/presignedURL")
+    public ResponseEntity<String> createPresignedGetURL(@RequestParam(value = "key") String key) {
+        try (
+                // S3Presigner는 presignedURL을 생성하는 객체입니다.
+                S3Presigner presigner = S3Presigner.create()
+        ) {
+            // GetObjectRequest는 S3에 저장하고자 하는 요청 객체를 정의합니다.
+            GetObjectRequest objectRequest = GetObjectRequest.builder()
+                    .bucket(BUCKET_NAME)
+                    .key(key)
+                    .build();
+
+            // GetObjectPresignRequest는 presignedURL get 요청을 하기 위한 객체를 정의합니다.
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(5))
+                    .getObjectRequest(objectRequest)
+                    .build();
+
+            // presignedURL 요청
+            PresignedGetObjectRequest presignedRequest = presigner.presignGetObject(presignRequest);
+
+            // presignedURL
+            String presignedURL = presignedRequest.url().toExternalForm();
+            log.info("PresignedURL: {}", presignedURL);
+            log.info("PresignedURL HTTP Method: {}", presignedRequest.httpRequest().method());
+
+            return ResponseEntity
+                    .status(FOUND)
+                    .location(URI.create(presignedURL))
+                    .build();
         }
     }
 }
